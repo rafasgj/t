@@ -26,9 +26,11 @@ TODOFILE="${HOME}/.config/.TODO"
 [ -d "${HOME}/.config " ] && mkdir "${HOME}/.config"
 [ -f "${TODOFILE}" ] || echo "[]" > "${TODOFILE}"
 
+OPTIONS="had:lLpr:u:w:"
+
 usage() {
     cat <<EOF
-usage: t [-l [ID]] [-d|-r|-u ID] [-a DESCRIPTION] [ID_OR_DESCRIPTION]
+usage: t [-l [ID]] [-d|-r|-u ID] [-w TIMESTAMP] [-a DESCRIPTION] [ID_OR_DESCRIPTION]
 
 The default action is to list ('-l') tasks. If only a positional
 parameter is provided, if it is a number, the details of a task
@@ -36,13 +38,14 @@ is shown ('-l ID'), if it is a string, a new task is added to the
 task list.
 
 Options:
-      -a DESC     Add a new task
-      -d ID       Mark a task as done
-      -l [ID]     List all tasks, or detail a single task
-      -L          List all done tasks
-      -p          Purge all done tasks.
-      -r ID       Remove a task
-      -u ID       Mark task as undone
+      -a DESC        Add a new task
+      -d ID          Mark a task as done
+      -l [ID]        List all tasks, or detail a single task
+      -L             List all done tasks
+      -p             Purge all done tasks.
+      -r ID          Remove a task
+      -u ID          Mark task as undone
+      -w TIMESTAMP   When task is due (%Y-%m-%d [%H:%M])
 EOF
 }
 
@@ -52,12 +55,15 @@ die() {
 }
 
 
+SORT_BY_DUE_DATE="sort_by(.due_date) | reverse"
+
 list() {
     if [ -z "$1" ]
     then
-        jq -M '. | map(select(.done != true)) | to_entries | .[] | "\(.key): \(.value.description)"'  < "${TODOFILE}" | tr -d '"'
+        jq -M 'map(select(.done != true)) | '"${SORT_BY_DUE_DATE}"' | to_entries | .[] | "\(.key): \(.value.description) (\(try (.value.due_date | fromdate | strftime("%Y-%m-%d")) catch "no date"))"' < "${TODOFILE}" | tr -d '"'
     else
-        jq -C ".[$1]" < "${TODOFILE}"
+        QUERY='| (.due_date = (try (.due_date | fromdate | strftime("%Y-%m-%d %H:%M")) catch null)) | del(..|nulls)'
+        jq -C ".[$1] $QUERY" < "${TODOFILE}"
     fi
 }
 
@@ -75,7 +81,13 @@ append() {
     fi
 
     tmpfile="$(mktemp)"
-    jq --argjson task "\"$1\"" '. += [{description:$task, done: false}]' < "${TODOFILE}" > "${tmpfile}" && mv "${tmpfile}" "${TODOFILE}" && echo "Created task: $1"
+
+    if [ -z "${DATE}" ]
+    then
+        jq --argjson task "\"$1\"" '. += [{description:$task, done: false}]' < "${TODOFILE}" > "${tmpfile}" && mv "${tmpfile}" "${TODOFILE}" && echo "Created new task."
+    else
+        jq --argjson task "\"$1\"" --argjson date "$DATE" '. += [{description:$task, done: false, due_date: $date}]' < "${TODOFILE}" > "${tmpfile}" && mv "${tmpfile}" "${TODOFILE}" && echo "Created new task."
+    fi
 }
 
 
@@ -133,7 +145,7 @@ mark_undone() {
 
 CMD=''
 
-while getopts "had:lLpr:u:" opt
+while getopts "${OPTIONS}" opt
 do
     case "${opt}" in
         "a") CMD='append' ;;
@@ -142,7 +154,8 @@ do
         "L") CMD='list_done' ;;
         "p") CMD='purge' ;;
         "r") CMD='remove' ; ARG="${OPTARG}" ;;
-        "u") CMD='mark_undone' ; ARG="${OPTARG}";;
+        "u") CMD='mark_undone' ; ARG="${OPTARG}" ;;
+        "w") DATE="$(echo "\"${OPTARG}\"" | jq 'try strptime("%Y-%m-%d %H:%M") catch (split("\"")[1] | strptime("%Y-%m-%d")) | todate')" ;;
         "h") usage && exit 0 ;;
         *) usage && exit 1 ;;
     esac
