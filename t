@@ -38,14 +38,14 @@ is shown ('-l ID'), if it is a string, a new task is added to the
 task list.
 
 Options:
-      -a DESC        Add a new task
-      -d ID          Mark a task as done
-      -l [ID]        List all tasks, or detail a single task
-      -L             List all done tasks
-      -p             Purge all done tasks.
-      -r ID          Remove a task
-      -u ID          Mark task as undone
-      -w TIMESTAMP   When task is due (%Y-%m-%d [%H:%M])
+    -a DESC         Add a new task
+    -d ID           Mark a task as done
+    -l [ID]         List all open tasks, or detail a single open task.
+    -L [ID]         List all done tasks, or detail a silgle done task.
+    -p              Purge all done tasks.
+    -r ID           Remove a task
+    -u ID           Mark task as undone
+    -w TIMESTAMP    When task is due (%Y-%m-%d [%H:%M])
 EOF
 }
 
@@ -54,92 +54,100 @@ die() {
     exit 1 
 }
 
+check_no_error() {
+    [ $? == 0 ] && die "$*"
+}
+
+check_error() {
+    [ $? != 0 ] && die "$*"
+}
+
+update_tasks() {
+    tmpfile="$(mktemp)"
+    jq "$@" < "${TODOFILE}" > "${tmpfile}" && mv "${tmpfile}" "${TODOFILE}"
+    RESULT=$?
+    rm -f "${tmpfile}"
+    return ${RESULT}
+}
+
 
 SORT_BY_DUE_DATE="sort_by(.due_date) | reverse"
+SELECT_OPEN='map(select(.done | not)) |'"${SORT_BY_DUE_DATE}"
+SELECT_DONE='map(select(.done))'
+SELECT_BY_ID="${SELECT_OPEN}"'|.[$id]'
+SELECT_BY_DESCRIPTION='map(select(.description == $description)) | if length > 0 then map(.) else null end'
+GET_DESCRIPTION_BY_ID="${SELECT_BY_ID} | .description"
+AS_ENTRIES="to_entries | .[]"
 
 list() {
     if [ -z "$1" ]
     then
-        jq -M 'map(select(.done != true)) | '"${SORT_BY_DUE_DATE}"' | to_entries | .[] | "\(.key): \(.value.description) (\(try (.value.due_date | fromdate | strftime("%Y-%m-%d")) catch "no date"))"' < "${TODOFILE}" | tr -d '"'
+        FORMAT='"\(.key): \(.value.description) (\(try (.value.due_date | fromdate | strftime("%Y-%m-%d")) catch "no date"))"' 
+        jq -M "${SELECT_OPEN}|${AS_ENTRIES}|${FORMAT}" < "${TODOFILE}" | tr -d '"'
     else
-        QUERY='| (.due_date = (try (.due_date | fromdate | strftime("%Y-%m-%d %H:%M")) catch null)) | del(..|nulls)'
-        jq -C ".[$1] $QUERY" < "${TODOFILE}"
+        FORMAT_DUE_DATE='(.due_date = (try (.due_date | fromdate | strftime("%Y-%m-%d %H:%M")) catch null)) | del(..|nulls)'
+        jq -C --argjson id "$1" "${SELECT_BY_ID} | ${FORMAT_DUE_DATE}" < "${TODOFILE}"
     fi
 }
 
 
 list_done() {
-    jq -M '. | map(select(.done == true)) | to_entries | .[] | "\(.key): \(.value.description)"'  < "${TODOFILE}" | tr -d '"'
+    FORMAT='"\(.key): \(.value.description) (Completed: \(.value.done | fromdate | strftime("%Y-%m-%d %H:%M")))"'
+    jq -M "${SELECT_DONE}|${AS_ENTRIES}|${FORMAT}" < "${TODOFILE}" | tr -d '"'
 }
 
 
 append() {
-    if jq --argjson task "\"$1\"" --exit-status '. | map(select(.description == $task)) | if length > 0 then map(.) else null end' < "${TODOFILE}" >/dev/null
-    then
-        echo "Task already exists."
-        return
-    fi
-
-    tmpfile="$(mktemp)"
+    jq --argjson description "\"$1\"" --exit-status "${SELECT_BY_DESCRIPTION}" < "${TODOFILE}" >/dev/null
+    check_no_error "Task already exists."
 
     if [ -z "${DATE}" ]
     then
-        jq --argjson task "\"$1\"" '. += [{description:$task, done: false}]' < "${TODOFILE}" > "${tmpfile}" && mv "${tmpfile}" "${TODOFILE}" && echo "Created new task."
+        update_tasks --argjson task "\"$1\"" '. += [{description:$task}]'
     else
-        jq --argjson task "\"$1\"" --argjson date "$DATE" '. += [{description:$task, done: false, due_date: $date}]' < "${TODOFILE}" > "${tmpfile}" && mv "${tmpfile}" "${TODOFILE}" && echo "Created new task."
+        update_tasks --argjson task "\"$1\"" --argjson date "$DATE" '. += [{description:$task, due_date: $date}]'
     fi
+    check_error "Failed to create task."
+    echo "Created new task."
 }
 
 
 purge() {
-    tmpfile="$(mktemp)"
-    jq '. |= map(select(.done != true))' < "${TODOFILE}" > "${tmpfile}" && mv "${tmpfile}" "${TODOFILE}"
+    update_tasks "${SELECT_OPEN}"
+    check_error "Failed to purge tasks."
     echo "Purged done tasks."
 }
 
 
 remove() {
-    task="$(jq -M --exit-status --argjson id "$1" '. | map(select(.done != true)) | .[$id].description'  < "${TODOFILE}")"
+    task="$(jq -M --exit-status --argjson id "$1" "${GET_DESCRIPTION_BY_ID}"  < "${TODOFILE}")"
+    check_error "Task #${1} not open. Use 'purge' (-p) to remove all done tasks."
 
-    if [ $? != 0 ] 
-    then
-        echo "Task #${1} not open. Use 'purge' (-p) to remove all done tasks."
-        return
-    fi
-
-    tmpfile="$(mktemp)"
-    jq --argjson task "$task" --exit-status '. | map(select(.description == $task | not))' "${TODOFILE}" > "${tmpfile}" && mv "${tmpfile}" "${TODOFILE}"
+    update_tasks --argjson task "$task" --exit-status '. | map(select(.description == $task | not))'
+    check_error "Failed to remove task: #${1}."
     echo "Removed task: #${1}: ${task}"
 }
 
 
 mark_done() {
-    task="$(jq -M --exit-status --argjson id "$1" '. | map(select(.done != true)) | .[$id].description'  < "${TODOFILE}")"
+    task="$(jq -M --exit-status --argjson id "$1" "${GET_DESCRIPTION_BY_ID}" < "${TODOFILE}")"
+    check_error "Task #${1} not open."
 
-    if [ $? != 0 ] 
-    then
-        echo "Task #${1} not open."
-        return
-    fi
-
-    tmpfile="$(mktemp)"
-    jq --argjson task "${task}" '(.[] | select(.description == $task)).done |= true' < "${TODOFILE}" > "${tmpfile}" && mv "${tmpfile}" "${TODOFILE}"
-    echo "Marked done: #${1}: ${task}"
+    SET_TASK_DONE='(.[] | select(.description == $task)).done |= (now | localtime | todate)' 
+    update_tasks --argjson task "${task}" "${SET_TASK_DONE}"
+    check_error "Failed to complete task #${1}"
+    echo "Marked as done: #${1}: ${task}"
 }
 
 
 mark_undone() {
-    task="$(jq -M --exit-status --argjson id "$1" '. | map(select(.done == true)) | .[$id].description'  < "${TODOFILE}")"
+    task="$(jq -M --exit-status --argjson id "$1" "${SELECT_DONE}"'| .[$id].description'  < "${TODOFILE}")"
+    check_error "Task #${1} not done."
 
-    if [ $? != 0 ] 
-    then
-        echo "Task #${1} not done."
-        return
-    fi
-
-    tmpfile="$(mktemp)"
-    jq --argjson task "${task}" '(.[] | select(.description == $task)).done |= false' < "${TODOFILE}" > "${tmpfile}" && mv "${tmpfile}" "${TODOFILE}"
-    echo "Marked done: #${1}: ${task}"
+    SET_TASK_UNDONE='(.[] | select(.description == $task)).done |= false' 
+    update_tasks --argjson task "${task}" "${SET_TASK_UNDONE}"
+    check_error "Failed to reopen task: #${1}."
+    echo "Marked as not done: #${1}: ${task}"
 }
 
 
@@ -155,7 +163,7 @@ do
         "p") CMD='purge' ;;
         "r") CMD='remove' ; ARG="${OPTARG}" ;;
         "u") CMD='mark_undone' ; ARG="${OPTARG}" ;;
-        "w") DATE="$(echo "\"${OPTARG}\"" | jq 'try strptime("%Y-%m-%d %H:%M") catch (split("\"")[1] | strptime("%Y-%m-%d")) | todate')" ;;
+        "w") DATE="$( (echo "\"${OPTARG}\"" | jq 'try strptime("%Y-%m-%d %H:%M") catch (split("\"")[1] | strptime("%Y-%m-%d")) | todate') || die "Invalid date")";;
         "h") usage && exit 0 ;;
         *) usage && exit 1 ;;
     esac
