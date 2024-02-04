@@ -74,7 +74,7 @@ update_tasks() {
 SORT_BY_DUE_DATE="sort_by(.due_date) | reverse"
 SELECT_OPEN='map(select(.done | not)) |'"${SORT_BY_DUE_DATE}"
 SELECT_DONE='map(select(.done))'
-SELECT_BY_ID="${SELECT_OPEN}"'|.[$id]'
+SELECT_BY_ID="${SELECT_OPEN}"'|.[$id - 1]'
 SELECT_BY_DESCRIPTION='map(select(.description == $description)) | if length > 0 then map(.) else null end'
 GET_DESCRIPTION_BY_ID="${SELECT_BY_ID} | .description"
 AS_ENTRIES="to_entries | .[]"
@@ -82,7 +82,7 @@ AS_ENTRIES="to_entries | .[]"
 list() {
     if [ -z "$1" ]
     then
-        FORMAT='"\(.key): \(.value.description) (\(try (.value.due_date | fromdate | strftime("%Y-%m-%d")) catch "no date"))"' 
+        FORMAT='"\(.key + 1): \(.value.description) (\(try (.value.due_date | fromdate | strftime("%Y-%m-%d")) catch "no date"))"'
         jq -M "${SELECT_OPEN}|${AS_ENTRIES}|${FORMAT}" < "${TODOFILE}" | tr -d '"'
     else
         FORMAT_DUE_DATE='(.due_date = (try (.due_date | fromdate | strftime("%Y-%m-%d %H:%M")) catch null)) | del(..|nulls)'
@@ -92,7 +92,7 @@ list() {
 
 
 list_done() {
-    FORMAT='"\(.key): \(.value.description) (Completed: \(.value.done | fromdate | strftime("%Y-%m-%d %H:%M")))"'
+    FORMAT='"\(.key + 1): \(.value.description) (Completed: \(.value.done | fromdate | strftime("%Y-%m-%d %H:%M")))"'
     jq -M "${SELECT_DONE}|${AS_ENTRIES}|${FORMAT}" < "${TODOFILE}" | tr -d '"'
 }
 
