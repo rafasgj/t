@@ -141,7 +141,7 @@ mark_done() {
 
 
 mark_undone() {
-    task="$(jq -M --exit-status --argjson id "$1" "${SELECT_DONE}"'| .[$id].description'  < "${TODOFILE}")"
+    task="$(jq -M --exit-status --argjson id "$1" "${SELECT_DONE}"'| .[$id -1].description'  < "${TODOFILE}")"
     check_error "Task #${1} not done."
 
     SET_TASK_UNDONE='(.[] | select(.description == $task)).done |= false' 
