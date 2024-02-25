@@ -64,6 +64,7 @@ check_error() {
 }
 
 update_tasks() {
+    local tmpfile
     tmpfile="$(mktemp)"
     jq "$@" < "${TODOFILE}" > "${tmpfile}" && mv "${tmpfile}" "${TODOFILE}"
     RESULT=$?
@@ -111,6 +112,7 @@ add_note() {
 }
 
 list() {
+    local FORMAT FORMAT_DUE_DATE
     if [ -z "$1" ]
     then
         FORMAT='"\(.key + 1): \(.value.description) (\(try (.value.due_date | fromdate | strftime("%Y-%m-%d")) catch "no date"))"'
@@ -123,6 +125,7 @@ list() {
 
 
 list_done() {
+    local FORMAT
     FORMAT='"\(.key + 1): \(.value.description) (Completed: \(.value.done | fromdate | strftime("%Y-%m-%d %H:%M")))"'
     jq -M "${SELECT_DONE}|${AS_ENTRIES}|${FORMAT}" < "${TODOFILE}" | tr -d '"'
 }
@@ -151,6 +154,7 @@ purge() {
 
 
 remove() {
+    local task
     task="$(jq -M --exit-status --argjson id "$1" "${GET_DESCRIPTION_BY_ID}"  < "${TODOFILE}")"
     check_error "Task #${1} not open. Use 'purge' (-p) to remove all done tasks."
 
@@ -161,6 +165,7 @@ remove() {
 
 
 mark_done() {
+    local task
     task="$(jq -M --exit-status --argjson id "$1" "${GET_DESCRIPTION_BY_ID}" < "${TODOFILE}")"
     check_error "Task #${1} not open."
 
@@ -172,6 +177,7 @@ mark_done() {
 
 
 mark_undone() {
+    local task
     task="$(jq -M --exit-status --argjson id "$1" "${SELECT_DONE}"'| .[$id -1].description'  < "${TODOFILE}")"
     check_error "Task #${1} not done."
 
