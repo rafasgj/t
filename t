@@ -26,7 +26,7 @@ TODOFILE="${HOME}/.config/.TODO"
 [ -d "${HOME}/.config " ] && mkdir "${HOME}/.config"
 [ -f "${TODOFILE}" ] || echo "[]" > "${TODOFILE}"
 
-OPTIONS="had:lLnpr:u:w:"
+OPTIONS="had:lLn:pr:u:w:"
 
 usage() {
     cat <<EOF
@@ -42,7 +42,7 @@ Options:
     -d ID           Mark a task as done
     -l [ID]         List all open tasks, or detail a single open task.
     -L [ID]         List all done tasks, or detail a silgle done task.
-    -n [ID]         Add a note to task
+    -n ID           Add a note to task
     -p              Purge all done tasks.
     -r ID           Remove a task
     -u ID           Mark task as undone
@@ -197,7 +197,7 @@ do
         "d") CMD='mark_done' ; ARG="${OPTARG}";;
         "l") CMD='list' ;;
         "L") CMD='list_done' ;;
-        "n") CMD='add_note' ;;
+        "n") CMD='add_note' ; ARG="${OPTARG}" ;;
         "p") CMD='purge' ;;
         "r") CMD='remove' ; ARG="${OPTARG}" ;;
         "u") CMD='mark_undone' ; ARG="${OPTARG}" ;;
