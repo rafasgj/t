@@ -26,7 +26,7 @@ TODOFILE="${HOME}/.config/.TODO"
 [ -d "${HOME}/.config " ] && mkdir "${HOME}/.config"
 [ -f "${TODOFILE}" ] || echo "[]" > "${TODOFILE}"
 
-OPTIONS="had:lLpr:u:w:"
+OPTIONS="had:lLnpr:u:w:"
 
 usage() {
     cat <<EOF
@@ -42,6 +42,7 @@ Options:
     -d ID           Mark a task as done
     -l [ID]         List all open tasks, or detail a single open task.
     -L [ID]         List all done tasks, or detail a silgle done task.
+    -n [ID]         Add a note to task
     -p              Purge all done tasks.
     -r ID           Remove a task
     -u ID           Mark task as undone
@@ -70,6 +71,13 @@ update_tasks() {
     return ${RESULT}
 }
 
+function join_note {
+  local d=${1-} f=${2-}
+  if shift 2; then
+    printf %s "$f" "${@/#/$d}"
+  fi
+}
+
 
 SORT_BY_DUE_DATE="sort_by(.due_date) | reverse"
 SELECT_OPEN='map(select(.done | not)) |'"${SORT_BY_DUE_DATE}"
@@ -78,6 +86,29 @@ SELECT_BY_ID="${SELECT_OPEN}"'|.[$id - 1]'
 SELECT_BY_DESCRIPTION='map(select(.description == $description)) | if length > 0 then map(.) else null end'
 GET_DESCRIPTION_BY_ID="${SELECT_BY_ID} | .description"
 AS_ENTRIES="to_entries | .[]"
+
+add_note() {
+    local tmpfile task SET_NOTE note_data new_note
+    tmpfile="$(mktemp --tmpdir "${USER}-t-XXXXXX")"
+    task="$(jq -M --exit-status --argjson id "$1" "${GET_DESCRIPTION_BY_ID}" < "${TODOFILE}")"
+    check_error "Task #${1} not open."
+    IFS="," read -ra note_data <<< $(jq -crM --argjson id "$1" "${SELECT_BY_ID} | select(.note != null).note" < "${TODOFILE}" | sed -n -e "s/^\[\(.*\)\]$/\1/p")
+    echo -e $(join_note "\n" "${note_data[@]}") | sed -e 's/^"\(.*\)"$/\1/' > "${tmpfile}"
+    original_data="$(cat ${tmpfile})"
+    ${EDITOR:-vim} "${tmpfile}"
+    if [ -n "$(diff - "${tmpfile}" <<<${original_data})" ]
+    then
+        mapfile -t note_data < "${tmpfile}"
+        new_note="[\"$(join_note '", "' "${note_data[@]}")\"]"
+        SET_NOTE='(.[] | select(.description == $task)).note |= $data'
+        update_tasks --argjson task "${task}" --argjson data "${new_note}" "${SET_NOTE}"
+        check_error "Failed to add note to #${1}"
+        echo "Added note to: #${1}: ${task}"
+    else
+        echo "Note not changed."
+    fi
+    rm -f "${tmpfile}"
+}
 
 list() {
     if [ -z "$1" ]
@@ -160,6 +191,7 @@ do
         "d") CMD='mark_done' ; ARG="${OPTARG}";;
         "l") CMD='list' ;;
         "L") CMD='list_done' ;;
+        "n") CMD='add_note' ;;
         "p") CMD='purge' ;;
         "r") CMD='remove' ; ARG="${OPTARG}" ;;
         "u") CMD='mark_undone' ; ARG="${OPTARG}" ;;
