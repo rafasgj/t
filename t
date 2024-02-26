@@ -21,12 +21,13 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+VERSION=0.2.0
 
 TODOFILE="${HOME}/.config/.TODO"
 [ -d "${HOME}/.config " ] && mkdir "${HOME}/.config"
 [ -f "${TODOFILE}" ] || echo "[]" > "${TODOFILE}"
 
-OPTIONS="had:lLn:m:pr:u:w:"
+OPTIONS="hVad:lLn:m:pr:u:w:"
 
 usage() {
     cat <<EOF
@@ -37,7 +38,12 @@ parameter is provided, if it is a number (ID{, the details of a single
 task is shown (same as '-l ID'), if it is a string (DESCRIPTION), a new
 task is added to the task list (same as '-a DESC').
 
+Version: $VERSION
+
 Options:
+    -h              Print this help and exit.
+    -V              Print version and exit.
+
     -a DESC         Add a new task.
     -d ID           Mark a task as done.
     -l [ID]         List all open tasks, or detail a single open task.
@@ -222,6 +228,7 @@ do
         "u") CMD='mark_undone' ; ID="${OPTARG}" ;;
         "w") DATE="$( (echo "\"${OPTARG}\"" | jq 'try strptime("%Y-%m-%d %H:%M") catch (split("\"")[1] | strptime("%Y-%m-%d")) | todate') || die "Invalid date")";;
         "h") usage && exit 0 ;;
+        "V") echo "t version $VERSION" && exit 0;;
         *) usage && exit 1 ;;
     esac
 done
