@@ -188,28 +188,29 @@ mark_undone() {
 }
 
 
+ID=''
 CMD=''
 
 while getopts "${OPTIONS}" opt
 do
     case "${opt}" in
         "a") CMD='append' ;;
-        "d") CMD='mark_done' ; ARG="${OPTARG}";;
+        "d") CMD='mark_done' ; ID="${OPTARG}";;
         "l") CMD='list' ;;
         "L") CMD='list_done' ;;
-        "n") CMD='add_note' ; ARG="${OPTARG}" ;;
+        "n") CMD='add_note' ; ID="${OPTARG}" ;;
         "p") CMD='purge' ;;
-        "r") CMD='remove' ; ARG="${OPTARG}" ;;
-        "u") CMD='mark_undone' ; ARG="${OPTARG}" ;;
+        "r") CMD='remove' ; ID="${OPTARG}" ;;
+        "u") CMD='mark_undone' ; ID="${OPTARG}" ;;
         "w") DATE="$( (echo "\"${OPTARG}\"" | jq 'try strptime("%Y-%m-%d %H:%M") catch (split("\"")[1] | strptime("%Y-%m-%d")) | todate') || die "Invalid date")";;
         "h") usage && exit 0 ;;
         *) usage && exit 1 ;;
     esac
 done
 
-shift $(( OPTIND - 1))
+shift $(( OPTIND - 1 ))
 
-ARG="${ARG:-$*}"
+ARG="$*"
 
 IS_NUM=$(( echo -n "${ARG}" | grep -Eq '[^0-9]' ) && echo NO || echo YES)
 
@@ -220,5 +221,4 @@ else
     [ -z "${CMD}" ] && CMD='append'
 fi 
 
-${CMD} "${ARG}"
-
+${CMD} $ID "${ARG}"
