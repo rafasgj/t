@@ -30,23 +30,24 @@ OPTIONS="had:lLn:m:pr:u:w:"
 
 usage() {
     cat <<EOF
-usage: t [-l [ID]] [-d|-r|-u ID] [-w TIMESTAMP] [-a DESCRIPTION] [ID_OR_DESCRIPTION]
+usage: t [options] [ID|DESCRIPTION]
 
 The default action is to list ('-l') tasks. If only a positional
-parameter is provided, if it is a number, the details of a task
-is shown ('-l ID'), if it is a string, a new task is added to the
-task list.
+parameter is provided, if it is a number (ID{, the details of a single
+task is shown (same as '-l ID'), if it is a string (DESCRIPTION), a new
+task is added to the task list (same as '-a DESC').
 
 Options:
-    -a DESC         Add a new task
-    -d ID           Mark a task as done
+    -a DESC         Add a new task.
+    -d ID           Mark a task as done.
     -l [ID]         List all open tasks, or detail a single open task.
     -L [ID]         List all done tasks, or detail a silgle done task.
-    -n ID           Add a note to task
-    -m ID           Modify a task
+    -n ID           Add a note to task.
+    -m ID           Modify a task.
+                    Use toghether with any of '-w' and DESCRIPTION.
     -p              Purge all done tasks.
-    -r ID           Remove a task
-    -u ID           Mark task as undone
+    -r ID           Remove a task.
+    -u ID           Mark task as undone.
     -w TIMESTAMP    When task is due (%Y-%m-%d [%H:%M])
 EOF
 }
