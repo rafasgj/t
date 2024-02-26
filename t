@@ -26,7 +26,7 @@ TODOFILE="${HOME}/.config/.TODO"
 [ -d "${HOME}/.config " ] && mkdir "${HOME}/.config"
 [ -f "${TODOFILE}" ] || echo "[]" > "${TODOFILE}"
 
-OPTIONS="had:lLn:pr:u:w:"
+OPTIONS="had:lLn:m:pr:u:w:"
 
 usage() {
     cat <<EOF
@@ -43,6 +43,7 @@ Options:
     -l [ID]         List all open tasks, or detail a single open task.
     -L [ID]         List all done tasks, or detail a silgle done task.
     -n ID           Add a note to task
+    -m ID           Modify a task
     -p              Purge all done tasks.
     -r ID           Remove a task
     -u ID           Mark task as undone
@@ -188,6 +189,21 @@ mark_undone() {
 }
 
 
+modify_task() {
+    task_id="${1}"
+    shift 1
+    task="$(jq --argjson id "${task_id}" --exit-status "${SELECT_BY_ID} | .description" < "${TODOFILE}")"
+    check_error "Task #${task_id} not open."
+
+    local changes
+    declare -a changes
+    [ -n "${DATE}" ] && changes+=("due_date: ${DATE}")
+    [ -n "${1}" ] && changes+=("description: \"${1}\"")
+    update_tasks --argjson task "${task}" "(.[] | select(.description=\$task)) |= {$(join_note "," "${changes[@]}")}"
+
+    list "${task_id}"
+}
+
 ID=''
 CMD=''
 
@@ -199,6 +215,7 @@ do
         "l") CMD='list' ;;
         "L") CMD='list_done' ;;
         "n") CMD='add_note' ; ID="${OPTARG}" ;;
+        "m") CMD='modify_task' ; ID="${OPTARG}" ;;
         "p") CMD='purge' ;;
         "r") CMD='remove' ; ID="${OPTARG}" ;;
         "u") CMD='mark_undone' ; ID="${OPTARG}" ;;
