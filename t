@@ -123,7 +123,7 @@ list() {
     local FORMAT FORMAT_DUE_DATE
     if [ -z "$1" ]
     then
-        FORMAT='"\(.key + 1): \(.value.description) (\(try (.value.due_date | fromdate | strftime("%Y-%m-%d")) catch "no date"))"'
+        FORMAT='"\(.key + 1): \(.value.description) \(try (.value.due_date | fromdate | strftime("(due: %Y-%m-%d)")) catch "")"'
         jq -M "${SELECT_OPEN}|${AS_ENTRIES}|${FORMAT}" < "${TODOFILE}" | tr -d '"'
     else
         FORMAT_DUE_DATE='(.due_date = (try (.due_date | fromdate | strftime("%Y-%m-%d %H:%M")) catch null)) | del(..|nulls)'
