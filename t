@@ -72,7 +72,7 @@ update_tasks() {
     return ${RESULT}
 }
 
-function join_note {
+join_note() {
   local d=${1-} f=${2-}
   if shift 2; then
     printf %s "$f" "${@/#/$d}"
