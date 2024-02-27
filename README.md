@@ -28,6 +28,7 @@ Apart from `jq`, which does most of the work, `t` depend on some common
 tools to work:
 * `bash`
 * `mktemp`
+* `date`
 
 For adding notes (`-n`) it also requires:
 * `sed`

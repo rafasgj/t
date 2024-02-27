@@ -143,12 +143,15 @@ append() {
     jq --argjson description "\"$1\"" --exit-status "${SELECT_BY_DESCRIPTION}" < "${TODOFILE}" >/dev/null
     check_no_error "Task already exists."
 
-    if [ -z "${DATE}" ]
-    then
-        update_tasks --argjson task "\"$1\"" '. += [{description:$task}]'
-    else
-        update_tasks --argjson task "\"$1\"" --argjson date "$DATE" '. += [{description:$task, due_date: $date}]'
-    fi
+    local creation
+    local changes
+    declare -a changes
+    local creation="$(jq 'fromdate | todate' <<< "\"$(date -Iseconds | cut -d- -f1-3)Z\"")"
+
+    changes=("creation_time: $creation" "description: \"${1}\"")
+    [ -n "${DATE}" ] && changes+=("due_date: ${DATE}")
+
+    update_tasks ". += [{$(join_note "," "${changes[@]}")}]"
     check_error "Failed to create task."
     echo "Created new task."
 }
