@@ -58,6 +58,10 @@ Options:
 EOF
 }
 
+check_deps() {
+    type "$1" >/dev/null && return 0 || return 1
+}
+
 die() {
     >&2 echo $*
     exit 1 
@@ -97,6 +101,8 @@ GET_DESCRIPTION_BY_ID="${SELECT_BY_ID} | .description"
 AS_ENTRIES="to_entries | .[]"
 
 add_note() {
+    check_deps sed || die "Notes are not supported."
+
     local tmpfile task SET_NOTE note_data new_note
     tmpfile="$(mktemp --tmpdir "${USER}-t-XXXXXX")"
     task="$(jq -M --exit-status --argjson id "$1" "${GET_DESCRIPTION_BY_ID}" < "${TODOFILE}")"
@@ -104,6 +110,7 @@ add_note() {
     IFS="," read -ra note_data <<< $(jq -crM --argjson id "$1" "${SELECT_BY_ID} | select(.note != null).note" < "${TODOFILE}" | sed -n -e "s/^\[\(.*\)\]$/\1/p")
     echo -e $(join_note "\n" "${note_data[@]}") | sed -e 's/^"\(.*\)"$/\1/' > "${tmpfile}"
     original_data="$(cat ${tmpfile})"
+    check_deps "${EDITOR:-vim}" || die "No editor found. (Please set env var EDITOR.)"
     ${EDITOR:-vim} "${tmpfile}"
     if [ -n "$(diff - "${tmpfile}" <<<${original_data})" ]
     then
@@ -143,12 +150,15 @@ append() {
     jq --argjson description "\"$1\"" --exit-status "${SELECT_BY_DESCRIPTION}" < "${TODOFILE}" >/dev/null
     check_no_error "Task already exists."
 
-    local creation
-    local changes
+    local creation changes
     declare -a changes
-    local creation="$(jq 'fromdate | todate' <<< "\"$(date -Iseconds | cut -d- -f1-3)Z\"")"
-
-    changes=("creation_time: $creation" "description: \"${1}\"")
+    if check_deps date
+    then
+        creation="$(jq 'fromdate | todate' <<< "\"$(date -Iseconds | cut -d- -f1-3)Z\"")"
+        changes=("creation_time: $creation" "description: \"${1}\"")
+    else
+        changes=("description: \"${1}\"")
+    fi
     [ -n "${DATE}" ] && changes+=("due_date: ${DATE}")
 
     update_tasks ". += [{$(join_note "," "${changes[@]}")}]"
