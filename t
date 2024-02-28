@@ -94,8 +94,9 @@ join_note() {
 
 FUTURE_DATE="\"$(date --date "$(($(date +"%Y") + 100))-12-31" +"%Y-%m-%dT%H:%M:%SZ")\""
 SORT_BY_DUE_DATE="map(._sort_date=if .due_date then .due_date else $FUTURE_DATE end) | sort_by(._sort_date)"
+SORT_BY_DONE_DATE="sort_by(.done) | reverse"
 SELECT_OPEN='map(select(.done | not)) |'"${SORT_BY_DUE_DATE}"
-SELECT_DONE='map(select(.done))'
+SELECT_DONE='map(select(.done)) | '"${SORT_BY_DONE_DATE}"
 SELECT_BY_ID="${SELECT_OPEN}"'|.[$id - 1]'
 SELECT_BY_DESCRIPTION='map(select(.description == $description)) | if length > 0 then map(.) else null end'
 GET_DESCRIPTION_BY_ID="${SELECT_BY_ID} | .description"
