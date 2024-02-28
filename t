@@ -92,7 +92,8 @@ join_note() {
 }
 
 
-SORT_BY_DUE_DATE="sort_by(.due_date) | reverse"
+FUTURE_DATE="\"$(date --date "$(($(date +"%Y") + 100))-12-31" +"%Y-%m-%dT%H:%M:%SZ")\""
+SORT_BY_DUE_DATE="map(._sort_date=if .due_date then .due_date else $FUTURE_DATE end) | sort_by(._sort_date)"
 SELECT_OPEN='map(select(.done | not)) |'"${SORT_BY_DUE_DATE}"
 SELECT_DONE='map(select(.done))'
 SELECT_BY_ID="${SELECT_OPEN}"'|.[$id - 1]'
