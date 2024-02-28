@@ -27,7 +27,8 @@ TODOFILE="${HOME}/.config/.TODO"
 [ -d "${HOME}/.config " ] && mkdir "${HOME}/.config"
 [ -f "${TODOFILE}" ] || echo "[]" > "${TODOFILE}"
 
-OPTIONS="hVad:lLn:m:pr:u:w:"
+OPTIONS="hVad:lLn:m:ps:r:u:w:"
+
 
 usage() {
     cat <<EOF
@@ -41,39 +42,50 @@ task is added to the task list (same as '-a DESC').
 Version: $VERSION
 
 Options:
-    -h              Print this help and exit.
-    -V              Print version and exit.
+  -h              Print this help and exit.
+  -V              Print version and exit.
 
-    -a DESC         Add a new task.
-    -d ID           Mark a task as done.
-    -l [ID]         List all open tasks, or detail a single open task.
-    -L [ID]         List all done tasks, or detail a silgle done task.
-    -n ID           Add a note to task.
-    -m ID           Modify a task.
-                    Use toghether with any of '-w' and DESCRIPTION.
-    -p              Purge all done tasks.
-    -r ID           Remove a task.
-    -u ID           Mark task as undone.
-    -w TIMESTAMP    When task is due (%Y-%m-%d [%H:%M])
+  -a DESC         Add a new task.
+  -d ID           Mark a task as done.
+  -l [ID]         List all open tasks, or detail a single open task.
+  -L [ID]         List all done tasks, or detail a silgle done task.
+  -n ID           Add a note to task.
+  -m ID           Modify a task.
+                  Use toghether with any of '-w' and DESCRIPTION.
+  -p              Purge all done tasks.
+  -r ID           Remove a task.
+  -s ORDER        Sort tasks by selected field. Valid options are:
+                      due: Due date (defalt)
+                      done: Done date (default for 'done tasks')
+                      create: Creation date
+                      description: Alphabetically by description
+  -u ID           Mark task as undone.
+  -w TIMESTAMP    When task is due (%Y-%m-%d [%H:%M])
+
 EOF
 }
+
 
 check_deps() {
     type "$1" >/dev/null && return 0 || return 1
 }
+
 
 die() {
     >&2 echo $*
     exit 1 
 }
 
+
 check_no_error() {
     [ $? == 0 ] && die "$*"
 }
 
+
 check_error() {
     [ $? != 0 ] && die "$*"
 }
+
 
 update_tasks() {
     local tmpfile
@@ -84,6 +96,7 @@ update_tasks() {
     return ${RESULT}
 }
 
+
 join_note() {
   local d=${1-} f=${2-}
   if shift 2; then
@@ -93,21 +106,37 @@ join_note() {
 
 
 FUTURE_DATE="\"$(date --date "$(($(date +"%Y") + 100))-12-31" +"%Y-%m-%dT%H:%M:%SZ")\""
+TODAY_DATE="\"$(date +"%Y-%m-%dT%H:%M:%SZ")\""
 SORT_BY_DUE_DATE="map(._sort_date=if .due_date then .due_date else $FUTURE_DATE end) | sort_by(._sort_date)"
 SORT_BY_DONE_DATE="sort_by(.done) | reverse"
-SELECT_OPEN='map(select(.done | not)) |'"${SORT_BY_DUE_DATE}"
-SELECT_DONE='map(select(.done)) | '"${SORT_BY_DONE_DATE}"
-SELECT_BY_ID="${SELECT_OPEN}"'|.[$id - 1]'
+SORT_BY_CREATION="map(._sort_date=if .creation_time then .creation_time else $TODAY_DATE end) | sort_by(._sort_date)"
+SORT_BY_DESCRIPTION="sort_by(.description)"
+SORT_OPEN_TASKS="${SORT_BY_DUE_DATE}"
+SORT_DONE_TASKS="${SORT_BY_DONE_DATE}"
+declare -A sort_opts
+sort_opts=(
+    ["create"]="${SORT_BY_CREATION}"
+    ["done"]="${SORT_BY_DONE_DATE}"
+    ["due"]="${SORT_BY_DUE_DATE}"
+    ["desc"]="${SORT_BY_DESCRIPTION}"
+)
+SORT_ORDER="due"
+
+
+SELECT_OPEN='map(select(.done | not))'
+SELECT_DONE='map(select(.done))'
+SELECT_BY_ID='.[$id - 1]'
 SELECT_BY_DESCRIPTION='map(select(.description == $description)) | if length > 0 then map(.) else null end'
-GET_DESCRIPTION_BY_ID="${SELECT_BY_ID} | .description"
+GET_DESCRIPTION_BY_ID="${SELECT_BY_ID}|.description"
 AS_ENTRIES="to_entries | .[]"
+
 
 add_note() {
     check_deps sed || die "Notes are not supported."
 
     local tmpfile task SET_NOTE note_data new_note
     tmpfile="$(mktemp --tmpdir "${USER}-t-XXXXXX")"
-    task="$(jq -M --exit-status --argjson id "$1" "${GET_DESCRIPTION_BY_ID}" < "${TODOFILE}")"
+    task="$(jq -M --exit-status --argjson id "$1" "${SELECT_OPEN}|${sort_opts[${SORT_ORDER}]}|${GET_DESCRIPTION_BY_ID}" < "${TODOFILE}")"
     check_error "Task #${1} not open."
     IFS="," read -ra note_data <<< $(jq -crM --argjson id "$1" "${SELECT_BY_ID} | select(.note != null).note" < "${TODOFILE}" | sed -n -e "s/^\[\(.*\)\]$/\1/p")
     echo -e $(join_note "\n" "${note_data[@]}") | sed -e 's/^"\(.*\)"$/\1/' > "${tmpfile}"
@@ -128,15 +157,16 @@ add_note() {
     rm -f "${tmpfile}"
 }
 
+
 list() {
     local FORMAT FORMAT_DUE_DATE
     if [ -z "$1" ]
     then
         FORMAT='"\(.key + 1): \(.value.description) \(try (.value.due_date | fromdate | strftime("(due: %Y-%m-%d)")) catch "")"'
-        jq -M "${SELECT_OPEN}|${AS_ENTRIES}|${FORMAT}" < "${TODOFILE}" | tr -d '"'
+        jq -M "${SELECT_OPEN}|${sort_opts[${SORT_ORDER}]}|${AS_ENTRIES}|${FORMAT}" < "${TODOFILE}" | tr -d '"'
     else
         FORMAT_DUE_DATE='(.due_date = (try (.due_date | fromdate | strftime("%Y-%m-%d %H:%M")) catch null)) | del(..|nulls)'
-        jq -C --argjson id "$1" "${SELECT_BY_ID} | ${FORMAT_DUE_DATE}" < "${TODOFILE}"
+        jq -C --argjson id "$1" "${SELECT_OPEN}|${sort_opts[${SORT_ORDER}]}|${SELECT_BY_ID} | ${FORMAT_DUE_DATE}" < "${TODOFILE}"
     fi
 }
 
@@ -144,7 +174,7 @@ list() {
 list_done() {
     local FORMAT
     FORMAT='"\(.key + 1): \(.value.description) (Completed: \(.value.done | fromdate | strftime("%Y-%m-%d %H:%M")))"'
-    jq -M "${SELECT_DONE}|${AS_ENTRIES}|${FORMAT}" < "${TODOFILE}" | tr -d '"'
+    jq -M "${SELECT_DONE}|${sort_opts[${SORT_ORDER}]}|${AS_ENTRIES}|${FORMAT}" < "${TODOFILE}" | tr -d '"'
 }
 
 
@@ -178,7 +208,7 @@ purge() {
 
 remove() {
     local task
-    task="$(jq -M --exit-status --argjson id "$1" "${GET_DESCRIPTION_BY_ID}"  < "${TODOFILE}")"
+    task="$(jq -M --exit-status --argjson id "$1" "${SELECT_OPEN}|${sort_opts[${SORT_ORDER}]}|${GET_DESCRIPTION_BY_ID}"  < "${TODOFILE}")"
     check_error "Task #${1} not open. Use 'purge' (-p) to remove all done tasks."
 
     update_tasks --argjson task "$task" --exit-status '. | map(select(.description == $task | not))'
@@ -189,19 +219,19 @@ remove() {
 
 mark_done() {
     local task
-    task="$(jq -M --exit-status --argjson id "$1" "${GET_DESCRIPTION_BY_ID}" < "${TODOFILE}")"
+    task="$(jq -M --exit-status --argjson id "$1" "${SELECT_OPEN}|${sort_opts[${SORT_ORDER}]}|${GET_DESCRIPTION_BY_ID}" < "${TODOFILE}")"
     check_error "Task #${1} not open."
 
     SET_TASK_DONE='(.[] | select(.description == $task)).done |= (now | localtime | todate)' 
     update_tasks --argjson task "${task}" "${SET_TASK_DONE}"
-    check_error "Failed to complete task #${1}"
+    check_error "Failed to complete task #${1}: ${task}"
     echo "Marked as done: #${1}: ${task}"
 }
 
 
 mark_undone() {
     local task
-    task="$(jq -M --exit-status --argjson id "$1" "${SELECT_DONE}"'| .[$id -1].description'  < "${TODOFILE}")"
+    task="$(jq -M --exit-status --argjson id "$1" "${SELECT_DONE}|${sort_opts[${SORT_ORDER}]}|${GET_DESCRIPTION_BY_ID}"  < "${TODOFILE}")"
     check_error "Task #${1} not done."
 
     SET_TASK_UNDONE='(.[] | select(.description == $task)).done |= false' 
@@ -214,7 +244,7 @@ mark_undone() {
 modify_task() {
     task_id="${1}"
     shift 1
-    task="$(jq --argjson id "${task_id}" --exit-status "${SELECT_BY_ID} | .description" < "${TODOFILE}")"
+    task="$(jq --argjson id "${task_id}" --exit-status "${SELECT_DONE}|${sort_opts[${SORT_ORDER}]}|${GET_DESCRIPTION_BY_ID}" < "${TODOFILE}")"
     check_error "Task #${task_id} not open."
 
     local changes
@@ -229,24 +259,32 @@ modify_task() {
 ID=''
 CMD=''
 
+
 while getopts "${OPTIONS}" opt
 do
     case "${opt}" in
         "a") CMD='append' ;;
         "d") CMD='mark_done' ; ID="${OPTARG}";;
         "l") CMD='list' ;;
-        "L") CMD='list_done' ;;
+        "L") CMD='list_done' ; SORT_ORDER="done" ;;
         "n") CMD='add_note' ; ID="${OPTARG}" ;;
         "m") CMD='modify_task' ; ID="${OPTARG}" ;;
         "p") CMD='purge' ;;
         "r") CMD='remove' ; ID="${OPTARG}" ;;
-        "u") CMD='mark_undone' ; ID="${OPTARG}" ;;
+        "s")
+            case "${OPTARG}" in
+                "due"|"done"|"desc"|"create") SORT_ORDER="${OPTARG}" ;;
+                *) die "Invalid sort order: ${OPTARG}" ;;
+            esac ;;
+        "u") CMD='mark_undone' ; SORT_ORDER="done" ; ID="${OPTARG}" ;;
         "w") DATE="$( (echo "\"${OPTARG}\"" | jq 'try strptime("%Y-%m-%d %H:%M") catch (split("\"")[1] | strptime("%Y-%m-%d")) | todate') || die "Invalid date")";;
         "h") usage && exit 0 ;;
         "V") echo "t version $VERSION" && exit 0;;
         *) usage && exit 1 ;;
     esac
 done
+
+SORT_ORDER="${SORT_ORDER:-due}"
 
 shift $(( OPTIND - 1 ))
 
