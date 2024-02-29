@@ -244,7 +244,7 @@ mark_undone() {
 modify_task() {
     task_id="${1}"
     shift 1
-    task="$(jq --argjson id "${task_id}" --exit-status "${SELECT_DONE}|${sort_opts[${SORT_ORDER}]}|${GET_DESCRIPTION_BY_ID}" < "${TODOFILE}")"
+    task="$(jq -M --argjson id "${task_id}" --exit-status "${SELECT_OPEN}|${sort_opts[${SORT_ORDER}]}|${GET_DESCRIPTION_BY_ID}" < "${TODOFILE}")"
     check_error "Task #${task_id} not open."
 
     local changes
@@ -252,7 +252,7 @@ modify_task() {
     [ -n "${DATE}" ] && changes+=("due_date: ${DATE}")
     [ -n "${1}" ] && changes+=("description: \"${1}\"")
     update_tasks --argjson task "${task}" "(.[] | select(.description=\$task)) |= {$(join_note "," "${changes[@]}")}"
-
+    echo "Task ${task} modified to:"
     list "${task_id}"
 }
 
