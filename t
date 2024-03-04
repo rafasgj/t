@@ -251,7 +251,7 @@ modify_task() {
     declare -a changes
     [ -n "${DATE}" ] && changes+=("due_date: ${DATE}")
     [ -n "${1}" ] && changes+=("description: \"${1}\"")
-    update_tasks --argjson task "${task}" "(.[] | select(.description=\$task)) |= {$(join_note "," "${changes[@]}")}"
+    update_tasks --argjson task "${task}" "(.[] | select(.description == \$task)) |= {$(join_note "," "${changes[@]}")}"
     echo "Task ${task} modified to:"
     list "${task_id}"
 }
