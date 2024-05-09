@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Copyright (c) 2024 Rafael Guterres Jeffman
 #
@@ -104,8 +104,14 @@ join_note() {
   fi
 }
 
+platform="$(uname)"
 
-FUTURE_DATE="\"$(date --date "$(($(date +"%Y") + 100))-12-31" +"%Y-%m-%dT%H:%M:%SZ")\""
+if [ "${platform}" == "Darwin" ] 
+then
+    FUTURE_DATE="\"$(date -v+100y +"%Y-%m-%dT%H:%M:%SZ")\""
+else
+    FUTURE_DATE="\"$(date --date "$(($(date +"%Y") + 100))-12-31" +"%Y-%m-%dT%H:%M:%SZ")\""
+fi
 TODAY_DATE="\"$(date +"%Y-%m-%dT%H:%M:%SZ")\""
 SORT_BY_DUE_DATE="map(._sort_date=if .due_date then .due_date else $FUTURE_DATE end) | sort_by(._sort_date)"
 SORT_BY_DONE_DATE="sort_by(.done) | reverse"
