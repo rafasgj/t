@@ -8,7 +8,7 @@
 # the rights to use, copy, modify, merge, publish, distribute, sublicense,
 # and/or sell copies of the Software, and to permit persons to whom the
 # Software is furnished to do so, subject to the following conditions:
-# 
+#
 # The above copyright notice and this permission notice (including the next
 # paragraph) shall be included in all copies or substantial portions of the
 # Software.
@@ -73,7 +73,7 @@ check_deps() {
 
 die() {
     >&2 echo $*
-    exit 1 
+    exit 1
 }
 
 
@@ -228,7 +228,7 @@ mark_done() {
     task="$(jq -M --exit-status --argjson id "$1" "${SELECT_OPEN}|${sort_opts[${SORT_ORDER}]}|${GET_DESCRIPTION_BY_ID}" < "${TODOFILE}")"
     check_error "Task #${1} not open."
 
-    SET_TASK_DONE='(.[] | select(.description == $task)).done |= (now | localtime | todate)' 
+    SET_TASK_DONE='(.[] | select(.description == $task)).done |= (now | localtime | todate)'
     update_tasks --argjson task "${task}" "${SET_TASK_DONE}"
     check_error "Failed to complete task #${1}: ${task}"
     echo "Marked as done: #${1}: ${task}"
@@ -240,7 +240,7 @@ mark_undone() {
     task="$(jq -M --exit-status --argjson id "$1" "${SELECT_DONE}|${sort_opts[${SORT_ORDER}]}|${GET_DESCRIPTION_BY_ID}"  < "${TODOFILE}")"
     check_error "Task #${1} not done."
 
-    SET_TASK_UNDONE='(.[] | select(.description == $task)).done |= false' 
+    SET_TASK_UNDONE='(.[] | select(.description == $task)).done |= false'
     update_tasks --argjson task "${task}" "${SET_TASK_UNDONE}"
     check_error "Failed to reopen task: #${1}."
     echo "Marked as not done: #${1}: ${task}"
@@ -309,6 +309,6 @@ then
     CMD='list'
 else
     [ -z "${CMD}" ] && CMD='append'
-fi 
+fi
 
 ${CMD} $ID "${ARG}"
