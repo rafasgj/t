@@ -144,7 +144,7 @@ add_note() {
     tmpfile="$(mktemp --tmpdir "${USER}-t-XXXXXX")"
     task="$(jq -M --exit-status --argjson id "$1" "${SELECT_OPEN}|${sort_opts[${SORT_ORDER}]}|${GET_DESCRIPTION_BY_ID}" < "${TODOFILE}")"
     check_error "Task #${1} not open."
-    IFS="," read -ra note_data <<< $(jq -crM --argjson id "$1" "${SELECT_BY_ID} | select(.note != null).note" < "${TODOFILE}" | sed -n -e "s/^\[\(.*\)\]$/\1/p")
+    IFS="," read -ra note_data <<< $(jq -crM --argjson description "$task" "${SELECT_BY_DESCRIPTION} | .[0] | select(.note != null).note" < "${TODOFILE}" | sed -n -e "s/^\[\(.*\)\]$/\1/p")
     echo -e $(join_note "\n" "${note_data[@]}") | sed -e 's/^"\(.*\)"$/\1/' > "${tmpfile}"
     original_data="$(cat ${tmpfile})"
     check_deps "${EDITOR:-vim}" || die "No editor found. (Please set env var EDITOR.)"
