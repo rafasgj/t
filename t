@@ -21,7 +21,7 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-VERSION=0.4.0
+VERSION=0.4.1
 
 TODOFILE="${HOME}/.config/.TODO"
 [ -d "${HOME}/.config " ] && mkdir "${HOME}/.config"
@@ -106,7 +106,7 @@ join_note() {
 
 platform="$(uname)"
 
-if [ "${platform}" == "Darwin" ] 
+if [ "${platform}" == "Darwin" ]
 then
     FUTURE_DATE="\"$(date -v+100y +"%Y-%m-%dT%H:%M:%SZ")\""
 else
